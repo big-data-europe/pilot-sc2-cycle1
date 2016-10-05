@@ -1,36 +1,29 @@
 package eu.bde.spark.job.sc2;
 
-import com.google.common.collect.Lists;
 import java.io.File;
 import java.io.IOException;
-import java.util.Collections;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import kafka.serializer.DefaultDecoder;
 import kafka.serializer.StringDecoder;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.commons.io.FileUtils;
-import static org.apache.commons.lang3.StringUtils.SPACE;
+import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.api.java.function.FlatMapFunction;
 import org.apache.spark.streaming.Duration;
-import org.apache.spark.streaming.api.java.JavaDStream;
 import org.apache.spark.streaming.api.java.JavaPairDStream;
-import org.apache.spark.streaming.api.java.JavaPairInputDStream;
 import org.apache.spark.streaming.api.java.JavaStreamingContext;
 import org.apache.spark.streaming.kafka.KafkaUtils;
 import scala.Tuple2;
-import org.apache.spark.api.java.function.Function;
-import org.apache.spark.api.java.function.Function2;
-import org.apache.spark.api.java.function.PairFunction;
 import org.apache.spark.storage.StorageLevel;
 
 public class App {
+    
+    final static Logger LOGGER = Logger.getLogger(App.class.getName());
 
     //./spark-submit --class ${SPARK_APPLICATION_MAIN_CLASS} --master ${SPARK_MASTER_URL} ${SPARK_APPLICATION_JAR_LOCATION}
     public static void main(String[] args) {
@@ -58,6 +51,8 @@ public class App {
                 .setMaster(SPARK_MASTER_URL);
 
         JavaSparkContext sc = new JavaSparkContext(conf);
+        
+        
         JavaStreamingContext ssc = new JavaStreamingContext(sc, new Duration(10000));
 
         Map<String, String> kafkaParams = new HashMap<>();
@@ -71,22 +66,17 @@ public class App {
         JavaPairDStream<String, byte[]> input = KafkaUtils.createStream(ssc, String.class, byte[].class,
                 StringDecoder.class, DefaultDecoder.class, kafkaParams, topicMap, StorageLevel.MEMORY_ONLY());
         
-        input.foreachRDD(new Function<JavaPairRDD<String, byte[]>, Void>() {            
-            @Override            
-            public Void call(JavaPairRDD<String, byte[]> rdd) throws Exception {    
-                
-                rdd.values().collect().forEach(b -> {
-                    try {
-                        /* b = byte[], each byte[] represents a file */
-                        /* example: */
-                        FileUtils.writeByteArrayToFile(new File(("/xxx")), b);
-                        /* feed byte[] to rdf translator */
-                    } catch (IOException ex) {
-                        ex.printStackTrace();                        
-                    }
-                });
-                return null;
-            }
+        input.foreachRDD((JavaPairRDD<String, byte[]> rdd) -> {
+            /* usage example below: by flume pipeline definition rdd.key = fileName, rdd.value = file data as byte[] */
+            rdd.collect().forEach((Tuple2<String, byte[]> t) -> {
+                try {
+                    String fileName = t._1 != null ? t._1 : new String(MessageDigest.getInstance("MD5").digest((new Date()).toString().getBytes()));
+                    FileUtils.writeByteArrayToFile(new File(("/home/bde/".concat(fileName))), t._2);
+                } catch ( IOException | NoSuchAlgorithmException ex) {
+                    LOGGER.fatal(ex);
+                }
+            });
+            return null;
         });
         ssc.start();
         ssc.awaitTermination();
