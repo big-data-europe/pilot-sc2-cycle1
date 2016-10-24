@@ -27,6 +27,7 @@ public class App {
 
     //./spark-submit --class ${SPARK_APPLICATION_MAIN_CLASS} --master ${SPARK_MASTER_URL} ${SPARK_APPLICATION_JAR_LOCATION}
     public static void main(String[] args) {
+        
         // e.g. kafka-sandbox
         String APP_NAME = System.getenv("APP_NAME");
         // e.g.: /app/ , /home/turnguard/bin/apache/spark-1.6.0-bin-hadoop2.6
