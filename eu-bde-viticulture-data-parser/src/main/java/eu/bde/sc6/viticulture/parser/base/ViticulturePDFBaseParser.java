@@ -3,16 +3,15 @@ package eu.bde.sc6.viticulture.parser.base;
 import eu.bde.sc6.viticulture.parser.api.ViticultureDataParser;
 import eu.bde.sc6.viticulture.parser.api.TransformationException;
 import eu.bde.sc6.viticulture.parser.vocabulary.SIOC;
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import org.apache.pdfbox.pdfparser.PDFParser;
+import org.apache.pdfbox.cos.COSName;
+import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
-import org.apache.pdfbox.pdmodel.graphics.xobject.PDXObjectImage;
-import org.apache.pdfbox.util.PDFTextStripper;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
+import org.apache.pdfbox.text.PDFTextStripper;
 import org.openrdf.model.Literal;
 import org.openrdf.model.Statement;
 import org.openrdf.model.URI;
@@ -21,6 +20,7 @@ import org.openrdf.model.impl.StatementImpl;
 import org.openrdf.model.impl.URIImpl;
 import org.openrdf.model.vocabulary.DCTERMS;
 import org.openrdf.model.vocabulary.FOAF;
+import org.openrdf.model.vocabulary.RDF;
 
 /**
  *  Sample implementation of a ViticultureDataParser.
@@ -43,15 +43,11 @@ public class ViticulturePDFBaseParser implements ViticultureDataParser {
     public List<Statement> transform(String fileName, byte[] file) throws TransformationException {
         
         /**
-         * input stuff
-         */
-        InputStreamReader inputStreamReader = null;
-        ByteArrayInputStream byteArrayInputStream = null;        
-        /**
          * pdfBox stuff
-         */
-        PDFParser pdfParser = null;
+         */        
+        PDDocument pdDocument = null;
         PDFTextStripper pdfTextStripper = null;
+
         /**
          * output stuff
          */
@@ -59,27 +55,27 @@ public class ViticulturePDFBaseParser implements ViticultureDataParser {
         Literal source = new LiteralImpl(fileName);
         URI subject = new URIImpl(INSTANCE_NAMESPACE.concat(UUID.randomUUID().toString()));
         try {
-            /**
-             * input
-             */
-            byteArrayInputStream = new ByteArrayInputStream(file);
-            inputStreamReader = new InputStreamReader(byteArrayInputStream, "UTF-8");
+            
             /**
              * pdfBox
              */
-            pdfParser = new PDFParser(byteArrayInputStream);
-            pdfParser.parse();
+            pdDocument = PDDocument.load(file);
             pdfTextStripper = new PDFTextStripper();
             /**
              * output
              */
-            data.add(
-                new StatementImpl(
-                        subject,
-                        SIOC.CONTENT,
-                        new LiteralImpl(pdfTextStripper.getText(pdfParser.getPDDocument()))
-                )
-            );
+            
+            String plainText = pdfTextStripper.getText(pdDocument);
+            if(!plainText.trim().equals("")){
+                data.add(
+                    new StatementImpl(
+                            subject,
+                            SIOC.CONTENT,
+                            new LiteralImpl(plainText)
+                    )
+                );
+            }
+            
             data.add(
                 new StatementImpl(
                         subject,
@@ -88,34 +84,51 @@ public class ViticulturePDFBaseParser implements ViticultureDataParser {
                 )
             ); 
             
-            /**
-             * add more statements here, e.g.
-             *  for(Object page : pdfParser.getPDDocument().getDocumentCatalog().getAllPages()){
-             *       for(PDXObjectImage image : ((PDPage)page).getResources().getImages().values()){
-             *           data.add(new StatementImpl(subject,FOAF.IMAGE,new URIImpl("urn:image:"+UUID.randomUUID().toString())));
-             *       }
-             *   }   
-             * 
-             */
+            
+             // add more statements here, e.g.
+               for(PDPage page : pdDocument.getDocumentCatalog().getPages()){
+                   for(COSName cosName : page.getResources().getXObjectNames()){
+                       if(page.getResources().isImageXObject(cosName)){
+                           PDImageXObject image = (PDImageXObject)page.getResources().getXObject(cosName);
+                            /**
+                             * store image into hdfs and create an apropriate uri here
+                             * (instead of UUID.randomUUID()...)
+                             */
+                            URI imageURI = new URIImpl("urn:image:"+UUID.randomUUID().toString());
+                            /**
+                             * uncomment and adapt output directory to check the images on the local filesystem 
+                             */
+                            /*
+                            ImageIO.write(
+                                image.getImage(), 
+                                image.getSuffix(), 
+                                new FileOutputStream(
+                                    new File(
+                                        "/home/turnguard/Downloads/"
+                                            .concat(imageURI.getLocalName())
+                                            .concat(".")
+                                            .concat(image.getSuffix())
+                                    )
+                                )
+                            );
+                            */
+                            data.add(new StatementImpl(subject, DCTERMS.HAS_PART, imageURI));
+                            data.add(new StatementImpl(imageURI,RDF.TYPE,FOAF.IMAGE));
+                       }
+                   }
+                }   
+              
+             
             
             
         } catch (IOException ex) {
             throw new TransformationException(ex);
         } finally {
-            if(inputStreamReader!=null){
+            if(pdDocument!=null){
                 try {
-                    inputStreamReader.close();
+                    pdDocument.close();
                 } catch (IOException ex) {}
-            }
-            if(byteArrayInputStream!=null){
-                try {
-                    byteArrayInputStream.close();
-                } catch (IOException ex) {}
-            }   
-            
-            if(pdfParser != null){
-                pdfParser.clearResources();
-            }
+            }            
         }
         return data;
     }

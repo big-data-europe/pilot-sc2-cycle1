@@ -21,6 +21,11 @@
                 <enabled>true</enabled>
             </snapshots>
         </repository>    
+    <repository>
+        <id>Geotoolkit</id>
+        <name>Geotoolkit</name>
+        <url>http://maven.geotoolkit.org/</url>
+    </repository>        
     </repositories>
         
     <build>
@@ -41,6 +46,11 @@
     </properties>
 
     <dependencies>
+    <dependency>
+        <groupId>javax.media</groupId>
+        <artifactId>jai_imageio</artifactId>
+        <version>1.1.1</version>
+    </dependency>        
         <dependency>
             <groupId>org.openrdf.sesame</groupId>
             <artifactId>openrdf-sesame</artifactId>
@@ -72,7 +82,7 @@
         <dependency>
             <groupId>org.apache.pdfbox</groupId>
             <artifactId>pdfbox</artifactId>
-            <version>1.8.7</version>
+            <version>2.0.3</version>
             <type>jar</type>
         </dependency>
     </dependencies>
