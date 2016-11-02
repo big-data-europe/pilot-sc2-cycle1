@@ -4,7 +4,10 @@ import eu.bde.sc6.viticulture.parser.api.TransformationException;
 import eu.bde.sc6.viticulture.parser.api.UnknownViticultureDataParserException;
 import eu.bde.sc6.viticulture.parser.api.ViticultureDataParser;
 import eu.bde.sc6.viticulture.parser.impl.ViticultureDataParserRegistryImpl;
+import eu.bde.sc6.viticulture.parser.vocabulary.SIOC;
+
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
@@ -13,11 +16,18 @@ import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.List;
+import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
+import javax.imageio.ImageIO;
+
 import org.apache.commons.io.IOUtils;
+import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDDocumentInformation;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.junit.After;
 import org.junit.AfterClass;
@@ -26,6 +36,13 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.openrdf.model.Statement;
+import org.openrdf.model.URI;
+import org.openrdf.model.impl.LiteralImpl;
+import org.openrdf.model.impl.StatementImpl;
+import org.openrdf.model.impl.URIImpl;
+import org.openrdf.model.vocabulary.DCTERMS;
+import org.openrdf.model.vocabulary.FOAF;
+import org.openrdf.model.vocabulary.RDF;
 
 /**
  *
@@ -82,7 +99,7 @@ public class ViticultureBaseParserTest {
         try {            
             //pdDocument = PDDocument.load(ViticultureBaseParserTest.class.getResourceAsStream("/simple-openoffice.pdf"));
             /* note: 1.pdf doesn't contain any text, simple-openoffice.pdf does contain some text */
-            pdDocument = PDDocument.load(ViticultureBaseParserTest.class.getResourceAsStream("/1.pdf"));
+            pdDocument = PDDocument.load(ViticultureBaseParserTest.class.getResourceAsStream("/2.pdf"));
             info = pdDocument.getDocumentInformation();
             System.out.println( "Title=" + info.getTitle() );            
             System.out.println( "Author=" + info.getAuthor() );
@@ -99,7 +116,63 @@ public class ViticultureBaseParserTest {
             }
         }
     }
-    
+    @Test
+    public void testImageExtraction() throws IOException{        
+        PDDocument pdDocument = null;
+        PDDocumentInformation info = null;
+try {
+            
+            /**
+             * pdfBox
+             */
+            pdDocument = PDDocument.load(ViticultureBaseParserTest.class.getResourceAsStream("/2.pdf"));
+                            
+            
+            
+             // add more statements here, e.g.
+               for(PDPage page : pdDocument.getDocumentCatalog().getPages()){
+                   for(COSName cosName : page.getResources().getXObjectNames()){
+                       if(page.getResources().isImageXObject(cosName)){
+                           PDImageXObject image = (PDImageXObject)page.getResources().getXObject(cosName);
+                            /**
+                             * store image into hdfs and create an apropriate uri here
+                             * (instead of UUID.randomUUID()...)
+                             */
+                            URI imageURI = new URIImpl("urn:image:"+UUID.randomUUID().toString());
+                            /**
+                             * uncomment and adapt output directory to check the images on the local filesystem 
+                             */
+                            
+                            ImageIO.write(
+                                image.getImage(), 
+                                image.getSuffix(), 
+                                new FileOutputStream(
+                                    new File(
+                                    		"./images/"
+                                            .concat(imageURI.getLocalName())
+                                            .concat(".")
+                                            .concat(image.getSuffix())
+                                    )
+                                )
+                            );
+                            
+                                             }
+                   }
+                }   
+              
+             
+            
+            
+        } catch (IOException ex) {
+            //throw new TransformationException(ex);
+        } finally {
+            if(pdDocument!=null){
+                try {
+                    pdDocument.close();
+                } catch (IOException ex) {}
+            }            
+        }
+    }
     //@Test
     public void testAllPDFsForDataErrors() throws IOException{
         
